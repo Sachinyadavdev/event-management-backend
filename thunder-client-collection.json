@@ -1,0 +1,396 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "ISACA Silicon Valley API",
+  "collectionId": "isaca-sv-api",
+  "dateExported": "2025-10-25",
+  "version": "1.0",
+  "folders": [
+    {
+      "id": "auth-folder",
+      "name": "Authentication",
+      "requests": [
+        {
+          "name": "Register User",
+          "method": "POST",
+          "url": "{{base_url}}/api/auth/register",
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"full_name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"Test123\",\n  \"phone\": \"1234567890\",\n  \"company\": \"Tech Corp\",\n  \"position\": \"Developer\",\n  \"department\": \"IT\",\n  \"location\": \"San Jose, CA\"\n}"
+          }
+        },
+        {
+          "name": "Login User",
+          "method": "POST",
+          "url": "{{base_url}}/api/auth/login",
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"Test123\"\n}"
+          }
+        },
+        {
+          "name": "Login Admin",
+          "method": "POST",
+          "url": "{{base_url}}/api/auth/login",
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"email\": \"admin@isacasv.org\",\n  \"password\": \"Admin@123\"\n}"
+          }
+        },
+        {
+          "name": "Get My Profile",
+          "method": "GET",
+          "url": "{{base_url}}/api/auth/me",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Update Profile",
+          "method": "PUT",
+          "url": "{{base_url}}/api/auth/profile",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ],
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"full_name\": \"John Updated\",\n  \"phone\": \"9876543210\"\n}"
+          }
+        },
+        {
+          "name": "Change Password",
+          "method": "PUT",
+          "url": "{{base_url}}/api/auth/password",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ],
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"currentPassword\": \"Test123\",\n  \"newPassword\": \"NewTest123\"\n}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "users-folder",
+      "name": "Users Management (Admin)",
+      "requests": [
+        {
+          "name": "Get All Users",
+          "method": "GET",
+          "url": "{{base_url}}/api/users",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ]
+        },
+        {
+          "name": "Get User by ID",
+          "method": "GET",
+          "url": "{{base_url}}/api/users/2",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ]
+        },
+        {
+          "name": "Update User Status",
+          "method": "PUT",
+          "url": "{{base_url}}/api/users/2/status",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ],
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"status\": \"active\"\n}"
+          }
+        },
+        {
+          "name": "Update User Role",
+          "method": "PUT",
+          "url": "{{base_url}}/api/users/2/role",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ],
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"role_id\": 2\n}"
+          }
+        },
+        {
+          "name": "Get User Stats",
+          "method": "GET",
+          "url": "{{base_url}}/api/users/stats",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "events-folder",
+      "name": "Events",
+      "requests": [
+        {
+          "name": "Get All Events",
+          "method": "GET",
+          "url": "{{base_url}}/api/events"
+        },
+        {
+          "name": "Get Upcoming Events",
+          "method": "GET",
+          "url": "{{base_url}}/api/events?upcoming=true"
+        },
+        {
+          "name": "Get Event by ID",
+          "method": "GET",
+          "url": "{{base_url}}/api/events/1"
+        },
+        {
+          "name": "Create Event (Admin)",
+          "method": "POST",
+          "url": "{{base_url}}/api/events",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ],
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"event_title\": \"Cybersecurity Summit 2025\",\n  \"hosted_by\": \"ISACA Silicon Valley\",\n  \"event_status\": \"published\",\n  \"event_category\": \"Conference\",\n  \"event_date\": \"2025-11-15\",\n  \"start_time\": \"09:00:00\",\n  \"end_time\": \"17:00:00\",\n  \"member_price\": 100.00,\n  \"non_member_price\": 150.00,\n  \"max_attendees\": 200,\n  \"cpe_hours\": 8.0,\n  \"event_tags\": [\"cybersecurity\", \"conference\", \"networking\"],\n  \"event_description\": \"Annual cybersecurity summit featuring industry experts\"\n}"
+          }
+        },
+        {
+          "name": "Update Event (Admin)",
+          "method": "PUT",
+          "url": "{{base_url}}/api/events/1",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ],
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"event_title\": \"Updated Event Title\",\n  \"max_attendees\": 250\n}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "registrations-folder",
+      "name": "Event Registrations",
+      "requests": [
+        {
+          "name": "Register for Event",
+          "method": "POST",
+          "url": "{{base_url}}/api/registrations/1",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Get My Registrations",
+          "method": "GET",
+          "url": "{{base_url}}/api/registrations/my",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Cancel Registration",
+          "method": "DELETE",
+          "url": "{{base_url}}/api/registrations/1",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Get Event Attendees (Admin)",
+          "method": "GET",
+          "url": "{{base_url}}/api/registrations/event/1",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ]
+        },
+        {
+          "name": "Mark as Attended (Admin)",
+          "method": "PUT",
+          "url": "{{base_url}}/api/registrations/1/attended",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ],
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"attended\": true,\n  \"cp_score\": 8\n}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "notifications-folder",
+      "name": "Notifications",
+      "requests": [
+        {
+          "name": "Get My Notifications",
+          "method": "GET",
+          "url": "{{base_url}}/api/notifications",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Get Unread Count",
+          "method": "GET",
+          "url": "{{base_url}}/api/notifications/unread-count",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Mark as Read",
+          "method": "PUT",
+          "url": "{{base_url}}/api/notifications/1/read",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Mark All as Read",
+          "method": "PUT",
+          "url": "{{base_url}}/api/notifications/read-all",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "misc-folder",
+      "name": "Miscellaneous",
+      "requests": [
+        {
+          "name": "Get All Roles",
+          "method": "GET",
+          "url": "{{base_url}}/api/roles"
+        },
+        {
+          "name": "Get My Certificates",
+          "method": "GET",
+          "url": "{{base_url}}/api/certificates/my",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Get Support Tickets",
+          "method": "GET",
+          "url": "{{base_url}}/api/support",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ]
+        },
+        {
+          "name": "Create Support Ticket",
+          "method": "POST",
+          "url": "{{base_url}}/api/support",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{token}}"
+            }
+          ],
+          "body": {
+            "type": "json",
+            "raw": "{\n  \"subject\": \"Need help with registration\",\n  \"message\": \"I'm having trouble registering for an event\",\n  \"category\": \"Registration\",\n  \"priority\": \"Medium\"\n}"
+          }
+        },
+        {
+          "name": "Get Dashboard Stats (Admin)",
+          "method": "GET",
+          "url": "{{base_url}}/api/dashboard/stats",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{admin_token}}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "Development",
+      "variables": [
+        {
+          "name": "base_url",
+          "value": "http://localhost:5000"
+        },
+        {
+          "name": "token",
+          "value": "YOUR_USER_TOKEN_HERE"
+        },
+        {
+          "name": "admin_token",
+          "value": "YOUR_ADMIN_TOKEN_HERE"
+        }
+      ]
+    }
+  ]
+}

@@ -10,8 +10,15 @@ export const getEvents = async (req, res, next) => {
     let queryText = `
       SELECT e.*, 
         (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registered_count,
-        (SELECT json_agg(json_build_object('id', s.id, 'full_name', s.full_name, 'photo_url', s.photo_url))
-         FROM event_speakers s WHERE s.event_id = e.id) as speakers
+        (SELECT json_agg(json_build_object('id', s.id, 'name', s.full_name, 'photo', s.photo_url, 'title', s.job_title, 'company', s.company))
+         FROM event_speakers s WHERE s.event_id = e.id) as speakers,
+        (SELECT json_build_object(
+           'id', m.id, 
+           'banner_image', m.banner_image, 
+           'banner_url', m.banner_url,
+           'overlay_settings', m.overlay_settings,
+           'overlay_opacity', m.overlay_opacity
+         ) FROM event_media m WHERE m.event_id = e.id) as media
       FROM events e
       WHERE 1=1
     `;
@@ -158,6 +165,12 @@ export const getEvent = async (req, res, next) => {
       [event.id]
     );
 
+    // Get event updates/notifications
+    const updatesResult = await query(
+      'SELECT * FROM event_updates WHERE event_id = $1 ORDER BY publication_timestamp DESC',
+      [event.id]
+    );
+
     // Get registration count
     const regCountResult = await query(
       'SELECT COUNT(*) as count FROM registrations WHERE event_id = $1',
@@ -197,9 +210,23 @@ export const getEvent = async (req, res, next) => {
         venue: venueResult.rows[0] || null,
         virtual_links: virtualResult.rows[0] || null,
         media: mediaResult.rows[0] || null,
-        speakers: speakersResult.rows,
+        speakers: speakersResult.rows.map(speaker => ({
+          id: speaker.id,
+          name: speaker.full_name,
+          photo: speaker.photo_url,
+          title: speaker.job_title,
+          company: speaker.company,
+          linkedin: speaker.linkedin_profile,
+          bio: speaker.biography
+        })),
         sponsors: sponsorsResult.rows,
         agenda: agendaResult.rows,
+        notifications: updatesResult.rows.map(update => ({
+          id: update.id,
+          title: update.update_title,
+          body: update.update_message,
+          createdAt: update.publication_timestamp
+        })),
         registered_count: parseInt(regCountResult.rows[0].count)
       }
     });
@@ -360,11 +387,20 @@ export const updateEvent = async (req, res, next) => {
       // 🏢 VENUE DATA
       venue_name,
       full_address,
+      google_maps_url,
       mode,
       // 🎨 BANNER & MEDIA DATA
       banner_image,
       banner_overlay_color,
-      banner_overlay_opacity
+      banner_overlay_opacity,
+      // 📋 AGENDA DATA
+      agenda,
+      // 👥 SPEAKERS DATA
+      speakers,
+      // 🏢 SPONSORS DATA
+      sponsors,
+      // 📢 EVENT UPDATES DATA
+      notifications
     } = req.body;
 
     console.log('Received update request for event:', req.params.id);
@@ -373,6 +409,7 @@ export const updateEvent = async (req, res, next) => {
     // Debug: Log incoming data
     console.log('Date update - event_date:', event_date, 'start_time:', start_time);
     console.log('Venue update - venue_name:', venue_name, 'full_address:', full_address, 'mode:', mode);
+    console.log('🗺️ Maps update - google_maps_url:', google_maps_url);
     console.log('🎨 Banner update - banner_image length:', banner_image?.length || 0, 
                 'overlay_color:', banner_overlay_color, 'overlay_opacity:', banner_overlay_opacity);
     console.log('🎨 Banner data types:', {
@@ -380,6 +417,7 @@ export const updateEvent = async (req, res, next) => {
       banner_overlay_color: typeof banner_overlay_color,
       banner_overlay_opacity: typeof banner_overlay_opacity
     });
+    console.log('👥 Speakers update - count:', speakers?.length || 0, 'first speaker:', speakers?.[0]);
 
     // Detect if identifier is numeric ID or text slug
     const identifier = req.params.id;
@@ -455,8 +493,9 @@ export const updateEvent = async (req, res, next) => {
       console.log('✅ Event updated successfully, ID:', eventId);
 
       // Update or insert venue data
-      if (venue_name || full_address || mode) {
+      if (venue_name || full_address || google_maps_url || mode) {
         console.log('🏢 Updating venue data for event ID:', eventId);
+        console.log('🏢 Venue data:', { venue_name, full_address, google_maps_url, mode });
         
         // Check if venue record exists
         const existingVenue = await client.query(
@@ -471,18 +510,19 @@ export const updateEvent = async (req, res, next) => {
             `UPDATE venues 
              SET venue_name = COALESCE($1, venue_name),
                  full_address = COALESCE($2, full_address),
-                 mode = COALESCE($3, mode)
-             WHERE event_id = $4`,
-            [venue_name, full_address, mode, eventId]
+                 google_maps_url = COALESCE($3, google_maps_url),
+                 mode = COALESCE($4, mode)
+             WHERE event_id = $5`,
+            [venue_name, full_address, google_maps_url, mode, eventId]
           );
           console.log('✅ Updated existing venue record');
         } else {
           // Insert new venue record
           console.log('🔄 Creating new venue record...');
           await client.query(
-            `INSERT INTO venues (event_id, venue_name, full_address, mode)
-             VALUES ($1, $2, $3, $4)`,
-            [eventId, venue_name, full_address, mode]
+            `INSERT INTO venues (event_id, venue_name, full_address, google_maps_url, mode)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [eventId, venue_name, full_address, google_maps_url, mode]
           );
           console.log('✅ Created new venue record');
         }
@@ -560,6 +600,150 @@ export const updateEvent = async (req, res, next) => {
         }
       }
 
+      // 📋 UPDATE AGENDA DATA
+      if (agenda && Array.isArray(agenda)) {
+        console.log('📋 Updating agenda data for event ID:', eventId);
+        console.log('📋 Agenda items count:', agenda.length);
+        
+        // First, delete existing agenda items
+        await client.query(
+          'DELETE FROM event_agenda WHERE event_id = $1',
+          [eventId]
+        );
+        console.log('🔄 Deleted existing agenda items');
+        
+        // Insert new agenda items
+        if (agenda.length > 0) {
+          for (let i = 0; i < agenda.length; i++) {
+            const item = agenda[i];
+            console.log('📋 Inserting agenda item:', item.title);
+            
+            await client.query(
+              `INSERT INTO event_agenda (event_id, session_title, session_description, start_time, end_time, session_speakers, display_order)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [
+                eventId,
+                item.title || '',
+                item.description || '',
+                item.start || item.startTime || null,
+                item.end || item.endTime || null,
+                Array.isArray(item.speakers) ? item.speakers : [],
+                i + 1 // display_order
+              ]
+            );
+          }
+          console.log('✅ Inserted', agenda.length, 'agenda items');
+        }
+      }
+
+      // Update speakers if provided
+      if (speakers && Array.isArray(speakers)) {
+        console.log('👥 Updating speakers data for event ID:', eventId);
+        console.log('👥 Speakers count:', speakers.length);
+        
+        // First, delete existing speakers
+        await client.query(
+          'DELETE FROM event_speakers WHERE event_id = $1',
+          [eventId]
+        );
+        console.log('🔄 Deleted existing speakers');
+        
+        // Insert new speakers
+        if (speakers.length > 0) {
+          for (let i = 0; i < speakers.length; i++) {
+            const speaker = speakers[i];
+            console.log('👥 Inserting speaker:', speaker.name);
+            
+            await client.query(
+              `INSERT INTO event_speakers (event_id, full_name, job_title, company, photo_url, linkedin_profile, biography, display_order)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              [
+                eventId,
+                speaker.name || '',
+                speaker.title || '',
+                speaker.company || '',
+                speaker.photo || '',
+                speaker.linkedin || '',
+                speaker.bio || '',
+                i + 1 // display_order
+              ]
+            );
+          }
+          console.log('✅ Inserted', speakers.length, 'speakers');
+        }
+      }
+
+      // Update sponsors if provided
+      if (sponsors && Array.isArray(sponsors)) {
+        console.log('🏢 Updating sponsors data for event ID:', eventId);
+        console.log('🏢 Sponsors count:', sponsors.length);
+        
+        // First, delete existing sponsors
+        await client.query(
+          'DELETE FROM event_sponsors WHERE event_id = $1',
+          [eventId]
+        );
+        console.log('🔄 Deleted existing sponsors');
+        
+        // Insert new sponsors
+        if (sponsors.length > 0) {
+          for (let i = 0; i < sponsors.length; i++) {
+            const sponsor = sponsors[i];
+            console.log('🏢 Inserting sponsor:', sponsor.name);
+            
+            await client.query(
+              `INSERT INTO event_sponsors (event_id, sponsor_name, logo_url, website_url, sponsorship_level, custom_label, display_order)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [
+                eventId,
+                sponsor.name || '',
+                sponsor.logo || '',
+                sponsor.website || '',
+                sponsor.level || 'bronze',
+                sponsor.customLabel || '',
+                i + 1 // display_order
+              ]
+            );
+          }
+          console.log('✅ Inserted', sponsors.length, 'sponsors');
+        }
+      }
+
+      // Update event updates/notifications if provided
+      if (notifications && Array.isArray(notifications)) {
+        console.log('📢 Updating event updates for event ID:', eventId);
+        console.log('📢 Event updates count:', notifications.length);
+        
+        // First, delete existing event updates
+        await client.query(
+          'DELETE FROM event_updates WHERE event_id = $1',
+          [eventId]
+        );
+        console.log('🔄 Deleted existing event updates');
+        
+        // Insert new event updates
+        if (notifications.length > 0) {
+          for (let i = 0; i < notifications.length; i++) {
+            const update = notifications[i];
+            console.log('📢 Inserting event update:', update.title);
+            console.log('📅 Update timestamp:', update.createdAt, '-> parsed:', new Date(update.createdAt));
+            
+            await client.query(
+              `INSERT INTO event_updates (event_id, update_title, update_message, publication_timestamp, created_by)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [
+                eventId,
+                update.title || '',
+                update.body || update.message || '',
+                update.createdAt ? new Date(update.createdAt) : new Date(), // Use custom date or current date
+                1 // Default to admin user for now
+              ]
+            );
+          }
+          console.log('✅ Inserted', notifications.length, 'event updates');
+        }
+      }
+
       await client.query('COMMIT');
       console.log('✅ Transaction committed successfully');
       result = eventResult; // Use the event result for the response
@@ -606,6 +790,35 @@ export const updateEvent = async (req, res, next) => {
       [result.rows[0].id]
     );
 
+    // Fetch updated agenda data for the response
+    const agendaResult = await query(
+      'SELECT * FROM event_agenda WHERE event_id = $1 ORDER BY start_time',
+      [result.rows[0].id]
+    );
+
+    // Fetch updated speakers data for the response
+    const speakersResult = await query(
+      'SELECT * FROM event_speakers WHERE event_id = $1 ORDER BY display_order',
+      [result.rows[0].id]
+    );
+
+    // Fetch updated sponsors data for the response
+    const sponsorsResult = await query(
+      'SELECT * FROM event_sponsors WHERE event_id = $1 ORDER BY display_order',
+      [result.rows[0].id]
+    );
+
+    // Fetch updated event updates/notifications for the response
+    const updatesResult = await query(
+      'SELECT * FROM event_updates WHERE event_id = $1 ORDER BY publication_timestamp DESC',
+      [result.rows[0].id]
+    );
+
+    console.log('🔍 SPEAKERS FETCH DEBUG:');
+    console.log('- Event ID:', result.rows[0].id);
+    console.log('- Raw speakers from DB:', speakersResult.rows);
+    console.log('- Speakers count:', speakersResult.rows.length);
+
     // Format the response to ensure dates are returned in the correct format
     const responseData = {
       ...result.rows[0],
@@ -613,6 +826,34 @@ export const updateEvent = async (req, res, next) => {
       venue: venueResult.rows[0] || null,
       // Include media data in response
       media: mediaResult.rows[0] || null,
+      // Include agenda data in response
+      agenda: agendaResult.rows || [],
+      // Include speakers data in response - transform to frontend format
+      speakers: (speakersResult.rows || []).map(s => ({
+        id: s.id,
+        name: s.full_name,
+        title: s.job_title,
+        company: s.company,
+        photo: s.photo_url,
+        linkedin: s.linkedin_profile,
+        bio: s.biography
+      })),
+      // Include sponsors data in response - transform to frontend format
+      sponsors: (sponsorsResult.rows || []).map(sp => ({
+        id: sp.id,
+        name: sp.sponsor_name,
+        logo: sp.logo_url,
+        website: sp.website_url,
+        level: sp.sponsorship_level,
+        customLabel: sp.custom_label
+      })),
+      // Include event updates/notifications in response - transform to frontend format
+      notifications: (updatesResult.rows || []).map(update => ({
+        id: update.id,
+        title: update.update_title,
+        body: update.update_message,
+        createdAt: update.publication_timestamp
+      })),
       // NUCLEAR APPROACH: Force date to be YYYY-MM-DD string with no timezone
       event_date: result.rows[0].event_date ? 
         (() => {
@@ -640,6 +881,20 @@ export const updateEvent = async (req, res, next) => {
     console.log('- banner_image:', responseData.media?.banner_image);
     console.log('- overlay_settings:', responseData.media?.overlay_settings);
     console.log('- overlay_opacity:', responseData.media?.overlay_opacity);
+    
+    console.log('📋 AGENDA DEBUG - Response data:');
+    console.log('- Agenda data in response:', responseData.agenda);
+    
+    console.log('👥 SPEAKERS DEBUG - Response data:');
+    console.log('- Speakers data in response:', responseData.speakers);
+    console.log('- Speakers count:', responseData.speakers?.length || 0);
+    
+    console.log('🏢 SPONSORS DEBUG - Response data:');
+    console.log('- Sponsors data in response:', responseData.sponsors);
+    console.log('- Sponsors count:', responseData.sponsors?.length || 0);
+    
+    console.log('📋 AGENDA DEBUG - Response data:');
+    console.log('- Agenda items count:', responseData.agenda?.length || 0);
 
     res.status(200).json({
       success: true,

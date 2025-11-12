@@ -44,6 +44,9 @@ pool.query('SELECT NOW()', (err, res) => {
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
+app.use('/uploads/speakers', express.static('uploads/speakers'));
+app.use('/uploads/banners', express.static('uploads/banners'));
+app.use('/uploads/sponsors', express.static('uploads/sponsors'));
 
 // Routes
 import authRoutes from "./routes/auth.js";
